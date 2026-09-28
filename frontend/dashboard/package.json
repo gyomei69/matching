@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node ./build-dashboard-bundle.mjs",
     "build:bundle": "node ./build-dashboard-bundle.mjs",
     "test": "vitest run",
     "test:watch": "vitest"

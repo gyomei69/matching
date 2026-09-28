@@ -1,4 +1,9 @@
 {
+  "name": "matching",
+  "scripts": {
+    "build": "npm --prefix frontend/dashboard run build",
+    "test": "npm --prefix frontend/dashboard test"
+  },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",

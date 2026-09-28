@@ -3,7 +3,7 @@
   const React = window.React;
   const { useMemo } = React;
 
-  function SubjectCategoryPicker({ selectedSubjects, onToggle, showError }) {
+  function SubjectCategoryPicker({ selectedSubjects, onToggle, showError, maxSubjects = 2 }) {
     const catalog = window.DashboardApp.SUBJECT_CATALOG || [];
     const categoryOrder = window.DashboardApp.SUBJECT_CATEGORY_ORDER || ["major"];
     const categoryLabels = window.DashboardApp.SUBJECT_CATEGORY_LABELS || {};
@@ -33,7 +33,11 @@
       <div className="subject-category-picker subject-category-picker--modern">
         <div className="complete-profile-subject-grid" role="list" aria-label="Subjects by category">
           {normalizedCatalog.map((entry) => {
-            const active = selected.includes(entry.name);
+            const isSelected =
+              selected.includes(entry.name) ||
+              selected.includes(entry.code) ||
+              (entry.id && selected.includes(entry.id));
+            const isSubjectDisabled = !isSelected && selected.length >= maxSubjects;
             return (
               <button
                 key={entry.name}
@@ -41,10 +45,27 @@
                 role="listitem"
                 className={
                   "complete-profile-subject-card mp-subject-card" +
-                  (active ? " is-active" : "")
+                  (isSelected ? " is-active" : "") +
+                  (isSubjectDisabled
+                    ? " opacity-50 cursor-not-allowed pointer-events-none is-disabled"
+                    : "")
                 }
-                aria-pressed={active}
-                onClick={() => onToggle(entry.name)}
+                style={
+                  isSubjectDisabled
+                    ? { opacity: 0.5, cursor: "not-allowed", pointerEvents: "none" }
+                    : undefined
+                }
+                aria-pressed={isSelected}
+                aria-disabled={isSubjectDisabled}
+                disabled={isSubjectDisabled}
+                onClick={(e) => {
+                  if (!isSelected && selected.length >= maxSubjects) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
+                  onToggle(entry.name);
+                }}
               >
                 <div className="mp-subject-top">
                   <span className={"mp-subject-category-badge mp-cat-" + entry.category}>
@@ -56,7 +77,7 @@
                           ? "NSTP"
                           : "PE"}
                   </span>
-                  {active ? (
+                  {isSelected ? (
                     <span className="mp-subject-check" aria-hidden="true">✓</span>
                   ) : (
                     <span className="mp-subject-check-placeholder" aria-hidden="true" />

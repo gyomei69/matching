@@ -105,6 +105,7 @@ async function loadDashboardModules() {
 	await import("./router/pages/CompleteProfilePage.jsx");
 	await import("./components/SubjectSkillPreferences.jsx");
 	await import("./router/pages/MentoringPreferencesPage.jsx");
+	await import("./router/pages/MenteeMatchingProfile.jsx");
 	await import("./router/pages/MentorMatchingProfilePage.jsx");
 	await import("./router/pages/MenteePreferencesPage.jsx");
 	await import("./router/pages/MentorPreferencesPage.jsx");
