@@ -1558,26 +1558,35 @@ import Slider from "@mui/material/Slider";
                 ))}
               </ul>
             )}
-          </aside>
-        </div>
 
-        {(!isPristine || justSaved) && (
-          <div
-            className={
-              "mp-sticky-bar" +
-              (justSaved && isPristine ? " is-saved" : " is-dirty")
-            }
-            role="status"
-          >
-            <div className="mp-sticky-meta">
-              <p className="mp-sticky-title">
-                {justSaved && isPristine ? "Saved" : "Unsaved changes"}
-              </p>
-              <p className="mp-sticky-subtitle">
-                {justSaved && isPristine
-                  ? "Your mentee matching profile was updated."
-                  : "Save your preferences to keep these updates."}
-              </p>
+            <div className="mp-preview-actions">
+              <button
+                type="button"
+                className="btn mp-save-preferences"
+                onClick={handleSave}
+                disabled={
+                  menteeMatchingSaving ||
+                  (!canSave && !isPristine) ||
+                  isFormInvalid
+                }
+                title={saveTooltip}
+              >
+                {menteeMatchingSaving
+                  ? "Saving…"
+                  : embedded
+                    ? "Save & finish"
+                    : "Save Preferences"}
+              </button>
+              {!isPristine && (
+                <button
+                  type="button"
+                  className="btn secondary small mp-preview-discard"
+                  onClick={handleReset}
+                  disabled={menteeMatchingSaving}
+                >
+                  Discard changes
+                </button>
+              )}
               {submitAttempted && (!canSave || isFormInvalid) && !isPristine && (
                 <p
                   className="complete-profile-error complete-profile-error-summary"
@@ -1592,34 +1601,16 @@ import Slider from "@mui/material/Slider";
                       : "Select at least one subject and a support need before saving."}
                 </p>
               )}
+              <p className="mp-preview-status" aria-live="polite">
+                {justSaved && isPristine
+                  ? "All changes saved."
+                  : isPristine
+                    ? "No unsaved changes."
+                    : "You have unsaved changes."}
+              </p>
             </div>
-            <div className="mp-sticky-actions">
-              <button
-                type="button"
-                className="btn primary small mp-sticky-save-btn"
-                onClick={handleSave}
-                disabled={menteeMatchingSaving || (!canSave && !isPristine) || isFormInvalid}
-                title={saveTooltip}
-              >
-                {menteeMatchingSaving
-                  ? "Saving…"
-                  : embedded
-                    ? "Save & finish"
-                    : "Save Preferences"}
-              </button>
-              {!isPristine && (
-                <button
-                  type="button"
-                  className="btn secondary small mp-sticky-discard-btn"
-                  onClick={handleReset}
-                  disabled={menteeMatchingSaving}
-                >
-                  Discard
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+          </aside>
+        </div>
       </div>
     );
   }
