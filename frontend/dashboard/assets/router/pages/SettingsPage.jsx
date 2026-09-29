@@ -13,8 +13,8 @@ import MenteePreferencesPage from "./MenteePreferencesPage.jsx";
   const BIO_MAX = 200;
   const MAX_TAGS = 8;
   const OPEN_SECTION_STORAGE_KEY = "settings:open-section";
-  const TAB_IDS = ["account", "password", "academic", "preferences"];
-  const LEGACY_SECTION_MAP = { general: "academic", bio: "account", matching: "preferences" };
+  const TAB_IDS = ["account", "password", "academic", "preferences", "coordinator"];
+  const LEGACY_SECTION_MAP = { general: "academic", bio: "account", matching: "preferences", automation: "coordinator" };
 
   /** Reads the section from a "settings/<section>" hash so links can open one directly. */
   function sectionFromHash() {
@@ -816,6 +816,12 @@ import MenteePreferencesPage from "./MenteePreferencesPage.jsx";
       settingsTabs.push({
         id: "preferences",
         label: "Matching Preferences",
+      });
+    }
+    if (isStaff) {
+      settingsTabs.push({
+        id: "coordinator",
+        label: "Match Automation",
       });
     }
 
@@ -1648,6 +1654,18 @@ import MenteePreferencesPage from "./MenteePreferencesPage.jsx";
         {activeTab === "preferences" && (
           <div className="settings-tab-panel" style={{ padding: 0 }}>
             <MenteePreferencesPage defaultRole={user.role === "mentor" ? "STUDENT_MENTOR" : "MENTEE"} />
+          </div>
+        )}
+
+        {activeTab === "coordinator" && isStaff && (
+          <div className="settings-tab-panel">
+            <h2 className="settings-tab-panel-title">Match Automation Settings</h2>
+            <p className="settings-tab-panel-subtitle">
+              Configure automated approval rules for mentor–mentee pairings across BukSU PeerLink.
+            </p>
+            {window.DashboardApp?.AutoApproveToggle && (
+              <window.DashboardApp.AutoApproveToggle />
+            )}
           </div>
         )}
       </div>

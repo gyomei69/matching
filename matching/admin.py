@@ -46,8 +46,8 @@ class CompetencyAdmin(admin.ModelAdmin):
 
 @admin.register(MenteeMentorRequest)
 class MenteeMentorRequestAdmin(admin.ModelAdmin):
-    list_display = ("mentee", "mentor", "created_at")
-    list_filter = ("created_at",)
+    list_display = ("mentee", "mentor", "status", "accepted", "created_at", "approved_at")
+    list_filter = ("status", "accepted", "created_at")
     search_fields = ("mentee__user__username", "mentor__user__username")
 
 

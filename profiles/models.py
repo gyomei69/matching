@@ -360,3 +360,45 @@ class VerificationDocument(models.Model):
     def __str__(self):
         owner = self.mentor_id or self.mentee_id
         return f"VerificationDocument<{self.kind}:{owner}>"
+
+
+class CoordinatorProfile(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="coordinator_profile",
+    )
+    is_auto_approve_enabled = models.BooleanField(
+        default=False,
+        help_text="If enabled, newly created mentorship pairings are automatically approved without manual review.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Coordinator Profile"
+        verbose_name_plural = "Coordinator Profiles"
+
+    def __str__(self):
+        return f"CoordinatorProfile<{self.user_id}: auto_approve={self.is_auto_approve_enabled}>"
+
+
+class SystemSettings(models.Model):
+    is_auto_approve_enabled = models.BooleanField(
+        default=False,
+        help_text="Global system setting for auto-approving new mentorship match requests.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "System Settings"
+        verbose_name_plural = "System Settings"
+
+    def __str__(self):
+        return f"SystemSettings(auto_approve={self.is_auto_approve_enabled})"
+
+    @classmethod
+    def get_settings(cls):
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
+

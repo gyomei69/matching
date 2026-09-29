@@ -59,6 +59,7 @@ from .controllers.coordinator_controller import (
     pending_users as coordinator_pending_users,
     approve_user as coordinator_approve_user,
     reject_user as coordinator_reject_user,
+    coordinator_auto_approve,
 )
 from .controllers.announcements_controller import (
     announcements_list,
@@ -180,6 +181,8 @@ urlpatterns = [
     path('coordinator/pending-users/', coordinator_pending_users, name='api-coordinator-pending-users'),
     path('coordinator/users/<int:user_id>/approve/', coordinator_approve_user, name='api-coordinator-user-approve'),
     path('coordinator/users/<int:user_id>/reject/', coordinator_reject_user, name='api-coordinator-user-reject'),
+    path('coordinator/auto-approve/', coordinator_auto_approve, name='api-coordinator-auto-approve'),
+    path('coordinator/settings/auto-approve/', coordinator_auto_approve, name='api-coordinator-settings-auto-approve'),
     path('notifications/', notifications_list, name='api-notifications-list'),
     path('notifications/unread-count/', notifications_unread_count, name='api-notifications-unread-count'),
     path('notifications/mark-all-read/', notifications_mark_all_read, name='api-notifications-mark-all-read'),

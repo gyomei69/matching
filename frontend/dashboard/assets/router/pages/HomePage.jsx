@@ -1805,6 +1805,11 @@ import Skeleton from "@mui/material/Skeleton";
                 <span>Post announcement</span>
               </button>
             </div>
+            {window.DashboardApp?.AutoApproveToggle && (
+              <div style={{ marginTop: "18px", borderTop: "1px solid var(--border-color, rgba(148, 163, 184, 0.2))", paddingTop: "14px" }}>
+                <window.DashboardApp.AutoApproveToggle compact />
+              </div>
+            )}
           </section>
 
           <aside

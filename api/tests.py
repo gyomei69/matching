@@ -1196,3 +1196,153 @@ class ApiCoordinatorAndMentorRegistrationTests(TestCase):
         self.assertEqual(mentee.skills, ["Control Structures", "Web Styling"])
         self.assertEqual(mentee.difficulty_level, 4)
         self.assertEqual(len(mentee.availability), 2)
+
+
+class CoordinatorAutoApproveToggleTests(TestCase):
+    def setUp(self):
+        from accounts.jwt_utils import issue_access_token
+        from accounts.models import UserProfile, get_user_profile
+        from profiles.models import CoordinatorProfile, SystemSettings
+
+        # Coordinator
+        self.coord_user = User.objects.create_user(
+            username="coord_toggle_test",
+            email="coord_toggle@buksu.edu.ph",
+            password="CoordPass123!",
+            is_staff=True,
+        )
+        coord_profile = get_user_profile(self.coord_user)
+        coord_profile.role = UserProfile.ROLE_COORDINATOR
+        coord_profile.approval_status = UserProfile.STATUS_ACTIVE
+        coord_profile.save()
+        self.coord_token = issue_access_token(self.coord_user)
+
+        # Regular mentee user
+        self.mentee_user = User.objects.create_user(
+            username="mentee_toggle_test",
+            email="mentee_toggle@student.buksu.edu.ph",
+            password="MenteePass123!",
+        )
+        m_profile = get_user_profile(self.mentee_user)
+        m_profile.role = UserProfile.ROLE_MENTEE
+        m_profile.approval_status = UserProfile.STATUS_ACTIVE
+        m_profile.save()
+        from matching.models import MenteeProfile, MentorProfile
+        self.mentee_profile = MenteeProfile.objects.create(
+            user=self.mentee_user,
+            program="BSIT",
+            year_level=1,
+            is_profile_complete=True,
+        )
+        self.mentee_token = issue_access_token(self.mentee_user)
+
+        # Mentor user
+        self.mentor_user = User.objects.create_user(
+            username="mentor_toggle_test",
+            email="mentor_toggle@student.buksu.edu.ph",
+            password="MentorPass123!",
+        )
+        mentor_p = get_user_profile(self.mentor_user)
+        mentor_p.role = UserProfile.ROLE_STUDENT_MENTOR
+        mentor_p.approval_status = UserProfile.STATUS_ACTIVE
+        mentor_p.save()
+        self.mentor_profile = MentorProfile.objects.create(
+            user=self.mentor_user,
+            program="BSIT",
+            year_level=4,
+            capacity=5,
+            approved=True,
+        )
+
+        # Reset global system settings
+        SystemSettings.objects.all().delete()
+        CoordinatorProfile.objects.all().delete()
+
+    def test_non_coordinator_forbidden(self):
+        res = self.client.get(
+            "/api/coordinator/auto-approve/",
+            HTTP_AUTHORIZATION=f"Bearer {self.mentee_token}",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_coordinator_get_and_patch_toggle(self):
+        # 1. GET initial state (defaults to False)
+        res = self.client.get(
+            "/api/coordinator/auto-approve/",
+            HTTP_AUTHORIZATION=f"Bearer {self.coord_token}",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.json().get("is_auto_approve_enabled"))
+
+        # 2. PATCH enable toggle
+        patch_res = self.client.patch(
+            "/api/coordinator/auto-approve/",
+            data=json.dumps({"is_auto_approve_enabled": True}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.coord_token}",
+        )
+        self.assertEqual(patch_res.status_code, 200)
+        self.assertTrue(patch_res.json().get("is_auto_approve_enabled"))
+
+        # 3. GET reflects updated state
+        get_res = self.client.get(
+            "/api/coordinator/auto-approve/",
+            HTTP_AUTHORIZATION=f"Bearer {self.coord_token}",
+        )
+        self.assertEqual(get_res.status_code, 200)
+        self.assertTrue(get_res.json().get("is_auto_approve_enabled"))
+
+    def test_conditional_automation_auto_approved(self):
+        from profiles.models import SystemSettings
+        from matching.models import MenteeMentorRequest
+
+        # Set toggle to True
+        settings = SystemSettings.get_settings()
+        settings.is_auto_approve_enabled = True
+        settings.save()
+
+        res = self.client.post(
+            "/api/matching/mentee-choose-mentor/",
+            data=json.dumps({"mentor_id": self.mentor_profile.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.mentee_token}",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        self.assertTrue(data.get("accepted"))
+        self.assertTrue(data.get("auto_approved"))
+        self.assertEqual(data.get("request_status"), "APPROVED")
+
+        req = MenteeMentorRequest.objects.get(mentee=self.mentee_profile, mentor=self.mentor_profile)
+        self.assertEqual(req.status, "APPROVED")
+        self.assertTrue(req.accepted)
+        self.assertIsNotNone(req.approved_at)
+        self.assertIsNotNone(req.accepted_at)
+
+    def test_conditional_automation_pending_review(self):
+        from profiles.models import SystemSettings
+        from matching.models import MenteeMentorRequest
+
+        # Set toggle to False
+        settings = SystemSettings.get_settings()
+        settings.is_auto_approve_enabled = False
+        settings.save()
+
+        res = self.client.post(
+            "/api/matching/mentee-choose-mentor/",
+            data=json.dumps({"mentor_id": self.mentor_profile.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.mentee_token}",
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        data = res.json()
+        self.assertFalse(data.get("accepted"))
+        self.assertFalse(data.get("auto_approved"))
+        self.assertEqual(data.get("request_status"), "PENDING")
+
+        req = MenteeMentorRequest.objects.get(mentee=self.mentee_profile, mentor=self.mentor_profile)
+        self.assertEqual(req.status, "PENDING")
+        self.assertFalse(req.accepted)
+        self.assertIsNone(req.approved_at)
+
+

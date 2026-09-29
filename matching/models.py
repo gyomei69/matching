@@ -236,11 +236,27 @@ class ModelMetadata(models.Model):
 
 class MenteeMentorRequest(models.Model):
     """Tracks when a mentee chooses a mentor; mentor can accept to make the pairing official."""
+    STATUS_PENDING = "PENDING"
+    STATUS_APPROVED = "APPROVED"
+    STATUS_REJECTED = "REJECTED"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_REJECTED, "Rejected"),
+    ]
+
     mentee = models.ForeignKey(MenteeProfile, on_delete=models.CASCADE)
     mentor = models.ForeignKey(MentorProfile, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     accepted = models.BooleanField(default=False)
     accepted_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ("mentee", "mentor")
@@ -248,10 +264,25 @@ class MenteeMentorRequest(models.Model):
         indexes = [
             models.Index(fields=["mentor", "-created_at"], name="matching_mmr_mentor_created"),
             models.Index(fields=["mentor", "accepted"], name="matching_mmr_mentor_accepted"),
+            models.Index(fields=["status", "-created_at"], name="matching_mmr_status_created"),
         ]
 
+    def save(self, *args, **kwargs):
+        if self.status == self.STATUS_APPROVED:
+            self.accepted = True
+            if not self.approved_at and self.accepted_at:
+                self.approved_at = self.accepted_at
+            elif not self.accepted_at and self.approved_at:
+                self.accepted_at = self.approved_at
+        elif self.accepted and self.status == self.STATUS_PENDING:
+            self.status = self.STATUS_APPROVED
+            if not self.approved_at and self.accepted_at:
+                self.approved_at = self.accepted_at
+        super().save(*args, **kwargs)
+
     def __str__(self) -> str:
-        return f"MenteeRequest({self.mentee_id}->{self.mentor_id})"
+        return f"MenteeRequest({self.mentee_id}->{self.mentor_id}:{self.status})"
+
 
 
 class Notification(models.Model):

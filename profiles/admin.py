@@ -1,5 +1,12 @@
 from django.contrib import admin
-from .models import MentorProfile, MenteeProfile, InterestTag, VerificationDocument
+from .models import (
+    MentorProfile,
+    MenteeProfile,
+    InterestTag,
+    VerificationDocument,
+    CoordinatorProfile,
+    SystemSettings,
+)
 from matching.models import Notification
 
 
@@ -64,3 +71,17 @@ class MenteeProfileAdmin(admin.ModelAdmin):
 class InterestTagAdmin(admin.ModelAdmin):
     list_display = ("name",)
     search_fields = ("name",)
+
+
+@admin.register(CoordinatorProfile)
+class CoordinatorProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "is_auto_approve_enabled", "updated_at")
+    list_filter = ("is_auto_approve_enabled",)
+    search_fields = ("user__username", "user__email")
+
+
+@admin.register(SystemSettings)
+class SystemSettingsAdmin(admin.ModelAdmin):
+    list_display = ("id", "is_auto_approve_enabled", "updated_at")
+    list_filter = ("is_auto_approve_enabled",)
+

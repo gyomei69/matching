@@ -790,6 +790,11 @@ import InfoOutlined from "@mui/icons-material/InfoOutlined";
             </button>
           </div>
         </header>
+ 
+        {/* Coordinator Auto-Approval Setting Toggle */}
+        {window.DashboardApp?.AutoApproveToggle && (
+          <window.DashboardApp.AutoApproveToggle />
+        )}
 
         {/* KPI Metrics Ribbon */}
         <div className="admin-paired-stats-grid">

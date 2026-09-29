@@ -4,6 +4,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from accounts.models import get_user_display_name
@@ -432,6 +433,17 @@ def mentee_choose_mentor(request):
                 status=409,
             )
 
+        # Check coordinator auto-approval setting
+        is_auto_approve = False
+        try:
+            from profiles.models import CoordinatorProfile, SystemSettings
+            is_auto_approve = (
+                SystemSettings.get_settings().is_auto_approve_enabled
+                or CoordinatorProfile.objects.filter(is_auto_approve_enabled=True).exists()
+            )
+        except Exception:
+            is_auto_approve = False
+
         req, _created = MenteeMentorRequest.objects.get_or_create(
             mentee=mentee_profile,
             mentor=mentor,
@@ -441,24 +453,84 @@ def mentee_choose_mentor(request):
                 "status": "ok",
                 "message": "Already paired with this mentor.",
                 "accepted": True,
+                "status_code": req.status,
                 "accepted_at": req.accepted_at.isoformat() if req.accepted_at else None,
             })
 
-        if not _created and not req.accepted:
-            return JsonResponse({
-                "status": "ok",
-                "message": "Pairing request already sent to mentor. Waiting for mentor acceptance.",
-                "accepted": False,
-                "request_sent": True,
-            })
-
-        if _created:
-            req.accepted = False
-            req.save(update_fields=["accepted"])
+        if is_auto_approve:
+            now = timezone.now()
+            req.status = MenteeMentorRequest.STATUS_APPROVED
+            req.accepted = True
+            req.accepted_at = now
+            req.approved_at = now
+            req.save(update_fields=["status", "accepted", "accepted_at", "approved_at"])
+        else:
+            if not _created and not req.accepted:
+                return JsonResponse({
+                    "status": "ok",
+                    "message": "Pairing request already sent to mentor. Waiting for mentor acceptance.",
+                    "accepted": False,
+                    "request_sent": True,
+                })
+            if _created:
+                req.status = MenteeMentorRequest.STATUS_PENDING
+                req.accepted = False
+                req.save(update_fields=["status", "accepted"])
 
     mentee_name = get_user_display_name(mentee_profile.user) or mentee_profile.user.username
     mentor_name = get_user_display_name(mentor.user) or mentor.user.username
 
+    if is_auto_approve:
+        Notification.objects.create(
+            user=mentee_profile.user,
+            message=f"Your pairing with {mentor_name} has been auto-approved! You are now officially paired.",
+            action_tab="matching",
+        )
+        Notification.objects.create(
+            user=mentor.user,
+            message=f"{mentee_name} has been automatically paired with you as a mentee.",
+            action_tab="mentees",
+        )
+
+        _send_pairing_email(
+            getattr(mentee_profile.user, "email", "") or "",
+            "Mentorship pairing approved",
+            (
+                f"Hi {mentee_name},\n\n"
+                f"Your mentorship request with {mentor_name} has been automatically approved!\n\n"
+                "You are now officially paired. Open Matching in your dashboard to view your mentor details."
+            ),
+        )
+        _send_pairing_email(
+            getattr(mentor.user, "email", "") or "",
+            "New mentee paired",
+            (
+                f"Hi {mentor_name},\n\n"
+                f"{mentee_name} has chosen you as a mentor. The pairing has been automatically approved by the system.\n\n"
+                "Open Mentees in your dashboard to view your new mentee."
+            ),
+        )
+
+        audit_log(request.user, "auto_approve", "mentee_mentor_request", req.id)
+        logger.info(
+            "mentee_pairing_auto_approved",
+            extra={
+                "mentee_id": mentee_profile.id,
+                "mentor_id": mentor.id,
+                "accepted": True,
+            },
+        )
+
+        return JsonResponse({
+            "status": "ok",
+            "request_status": "APPROVED",
+            "message": "Mentorship pairing automatically approved! You are now officially paired.",
+            "accepted": True,
+            "auto_approved": True,
+            "accepted_at": req.accepted_at.isoformat(),
+        })
+
+    # Standard manual review workflow
     Notification.objects.create(
         user=mentor.user,
         message=f"{mentee_name} has requested you as a mentor. Please review and accept the pairing request.",
@@ -492,6 +564,7 @@ def mentee_choose_mentor(request):
 
     return JsonResponse({
         "status": "ok",
+        "request_status": "PENDING",
         "message": "Pairing request sent to mentor. Waiting for mentor acceptance.",
         "accepted": False,
         "request_sent": True,
@@ -642,9 +715,11 @@ def mentor_accept_mentee(request):
                 status=409,
             )
 
+        req.status = MenteeMentorRequest.STATUS_APPROVED
         req.accepted = True
         req.accepted_at = timezone.now()
-        req.save(update_fields=["accepted", "accepted_at"])
+        req.approved_at = req.accepted_at
+        req.save(update_fields=["status", "accepted", "accepted_at", "approved_at"])
 
     mentee_name = get_user_display_name(req.mentee.user) or req.mentee.user.username
     mentor_name = get_user_display_name(mentor_locked.user) or mentor_locked.user.username
@@ -770,8 +845,13 @@ def admin_pairings(request):
     Staff-only endpoint: return all confirmed mentee-mentor pairings
     with rich matching details (compatibility score, shared subjects, shared competencies, schedules).
     """
-    if not request.user.is_staff:
-        return JsonResponse({"error": "Unauthorized. Staff access required."}, status=403)
+    is_coordinator_or_staff = (
+        request.user.is_staff
+        or request.user.is_superuser
+        or getattr(getattr(request.user, "profile", None), "role", "") == "COORDINATOR"
+    )
+    if not is_coordinator_or_staff:
+        return JsonResponse({"error": "Unauthorized. Staff or coordinator access required."}, status=403)
 
     requests = (
         MenteeMentorRequest.objects.filter(accepted=True)

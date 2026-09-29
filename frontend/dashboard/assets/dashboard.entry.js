@@ -88,6 +88,7 @@ async function loadDashboardModules() {
 	await import("./lib/selectionCatalog.jsx");
 	await import("./context.jsx");
 	await import("./components/MentorProfileCard.jsx");
+	await import("./components/AutoApproveToggle.jsx");
 	await import("./router/pages/AllPages.jsx");
 	await import("./router/pages/AuthPages.jsx");
 	await import("./router/pages/HomePage.jsx");
