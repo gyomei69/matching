@@ -372,6 +372,10 @@ class CoordinatorProfile(models.Model):
         default=False,
         help_text="If enabled, newly created mentorship pairings are automatically approved without manual review.",
     )
+    is_auto_verify_enabled = models.BooleanField(
+        default=False,
+        help_text="If enabled, newly registered users (mentors and mentees) are automatically approved and verified without manual review.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -380,13 +384,17 @@ class CoordinatorProfile(models.Model):
         verbose_name_plural = "Coordinator Profiles"
 
     def __str__(self):
-        return f"CoordinatorProfile<{self.user_id}: auto_approve={self.is_auto_approve_enabled}>"
+        return f"CoordinatorProfile<{self.user_id}: auto_approve={self.is_auto_approve_enabled}, auto_verify={self.is_auto_verify_enabled}>"
 
 
 class SystemSettings(models.Model):
     is_auto_approve_enabled = models.BooleanField(
         default=False,
         help_text="Global system setting for auto-approving new mentorship match requests.",
+    )
+    is_auto_verify_enabled = models.BooleanField(
+        default=False,
+        help_text="Global system setting for automatically verifying and approving newly registered users (mentors and mentees).",
     )
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -395,10 +403,11 @@ class SystemSettings(models.Model):
         verbose_name_plural = "System Settings"
 
     def __str__(self):
-        return f"SystemSettings(auto_approve={self.is_auto_approve_enabled})"
+        return f"SystemSettings(auto_approve={self.is_auto_approve_enabled}, auto_verify={self.is_auto_verify_enabled})"
 
     @classmethod
     def get_settings(cls):
         obj, _ = cls.objects.get_or_create(id=1)
         return obj
+
 

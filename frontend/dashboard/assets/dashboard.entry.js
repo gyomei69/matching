@@ -96,6 +96,7 @@ async function loadDashboardModules() {
 	await import("./router/pages/AnnouncementsPage.jsx");
 	await import("./router/pages/NotificationsPage.jsx");
 	await import("./router/pages/ApprovalsPage.jsx");
+	await import("./router/pages/UserApprovals.jsx");
 	await import("./router/pages/ActivityLogsPage.jsx");
 	await import("./router/pages/BackupPage.jsx");
 	await import("./router/pages/UsersPage.jsx");

@@ -75,13 +75,14 @@ class InterestTagAdmin(admin.ModelAdmin):
 
 @admin.register(CoordinatorProfile)
 class CoordinatorProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "is_auto_approve_enabled", "updated_at")
-    list_filter = ("is_auto_approve_enabled",)
+    list_display = ("user", "is_auto_approve_enabled", "is_auto_verify_enabled", "updated_at")
+    list_filter = ("is_auto_approve_enabled", "is_auto_verify_enabled")
     search_fields = ("user__username", "user__email")
 
 
 @admin.register(SystemSettings)
 class SystemSettingsAdmin(admin.ModelAdmin):
-    list_display = ("id", "is_auto_approve_enabled", "updated_at")
-    list_filter = ("is_auto_approve_enabled",)
+    list_display = ("id", "is_auto_approve_enabled", "is_auto_verify_enabled", "updated_at")
+    list_filter = ("is_auto_approve_enabled", "is_auto_verify_enabled")
+
 

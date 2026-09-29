@@ -1346,3 +1346,126 @@ class CoordinatorAutoApproveToggleTests(TestCase):
         self.assertIsNone(req.approved_at)
 
 
+class CoordinatorAutoVerifyTests(TestCase):
+    def setUp(self):
+        from accounts.jwt_utils import issue_access_token
+        from accounts.models import UserProfile, get_user_profile
+        from profiles.models import CoordinatorProfile, SystemSettings
+
+        self.coord_user = User.objects.create_user(
+            username="coord_verify_test",
+            email="coord_verify@buksu.edu.ph",
+            password="CoordPass123!",
+            is_staff=True,
+        )
+        coord_profile = get_user_profile(self.coord_user)
+        coord_profile.role = UserProfile.ROLE_COORDINATOR
+        coord_profile.approval_status = UserProfile.STATUS_ACTIVE
+        coord_profile.save()
+        self.coord_token = issue_access_token(self.coord_user)
+
+        self.mentee_user = User.objects.create_user(
+            username="mentee_verify_test",
+            email="mentee_verify@student.buksu.edu.ph",
+            password="MenteePass123!",
+        )
+        m_profile = get_user_profile(self.mentee_user)
+        m_profile.role = UserProfile.ROLE_MENTEE
+        m_profile.approval_status = UserProfile.STATUS_ACTIVE
+        m_profile.save()
+        self.mentee_token = issue_access_token(self.mentee_user)
+
+        SystemSettings.objects.all().delete()
+        CoordinatorProfile.objects.all().delete()
+
+    def test_non_coordinator_forbidden(self):
+        res = self.client.get(
+            "/api/coordinator/auto-verify/",
+            HTTP_AUTHORIZATION=f"Bearer {self.mentee_token}",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_coordinator_get_and_patch_toggle(self):
+        res = self.client.get(
+            "/api/coordinator/auto-verify/",
+            HTTP_AUTHORIZATION=f"Bearer {self.coord_token}",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.json().get("is_auto_verify_enabled"))
+
+        patch_res = self.client.patch(
+            "/api/coordinator/auto-verify/",
+            data=json.dumps({"is_auto_verify_enabled": True}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.coord_token}",
+        )
+        self.assertEqual(patch_res.status_code, 200)
+        self.assertTrue(patch_res.json().get("is_auto_verify_enabled"))
+
+        get_res = self.client.get(
+            "/api/coordinator/auto-verify/",
+            HTTP_AUTHORIZATION=f"Bearer {self.coord_token}",
+        )
+        self.assertEqual(get_res.status_code, 200)
+        self.assertTrue(get_res.json().get("is_auto_verify_enabled"))
+
+    @patch("accounts.email_utils.send_verification_email")
+    def test_registration_with_auto_verify_enabled(self, mock_email):
+        from profiles.models import SystemSettings
+        from accounts.models import UserProfile
+        from profiles.models import MenteeProfile
+
+        settings = SystemSettings.get_settings()
+        settings.is_auto_verify_enabled = True
+        settings.save()
+
+        res = self.client.post(
+            "/api/auth/register/",
+            data={
+                "first_name": "Auto",
+                "last_name": "Mentee",
+                "email": "auto.mentee@student.buksu.edu.ph",
+                "password": "Password123!",
+                "role": "MENTEE",
+                "campus": "Main Campus",
+                "program": "BSIT",
+                "year_level": 1,
+            },
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        user = User.objects.get(email="auto.mentee@student.buksu.edu.ph")
+        self.assertEqual(user.profile.approval_status, UserProfile.STATUS_ACTIVE)
+        mentee_prof = MenteeProfile.objects.get(user=user)
+        self.assertTrue(mentee_prof.approved)
+
+    @patch("accounts.email_utils.send_verification_email")
+    def test_registration_with_auto_verify_disabled(self, mock_email):
+        from profiles.models import SystemSettings
+        from accounts.models import UserProfile
+        from profiles.models import MenteeProfile
+
+        settings = SystemSettings.get_settings()
+        settings.is_auto_verify_enabled = False
+        settings.save()
+
+        res = self.client.post(
+            "/api/auth/register/",
+            data={
+                "first_name": "Manual",
+                "last_name": "Mentee",
+                "email": "manual.mentee@student.buksu.edu.ph",
+                "password": "Password123!",
+                "role": "MENTEE",
+                "campus": "Main Campus",
+                "program": "BSIT",
+                "year_level": 1,
+            },
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        user = User.objects.get(email="manual.mentee@student.buksu.edu.ph")
+        self.assertEqual(user.profile.approval_status, UserProfile.STATUS_PENDING)
+        mentee_prof = MenteeProfile.objects.get(user=user)
+        self.assertFalse(mentee_prof.approved)
+
+
+

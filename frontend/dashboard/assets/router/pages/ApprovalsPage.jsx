@@ -1270,6 +1270,86 @@
     const [rejectTarget, setRejectTarget] = useState(null);
     const [selectedDetailUser, setSelectedDetailUser] = useState(null);
 
+    // Auto-Verify New Users State
+    const [isAutoVerifyEnabled, setIsAutoVerifyEnabled] = useState(false);
+    const [autoVerifyLoading, setAutoVerifyLoading] = useState(true);
+    const [autoVerifySaving, setAutoVerifySaving] = useState(false);
+
+    useEffect(() => {
+      let isMounted = true;
+      async function fetchAutoVerifySetting() {
+        try {
+          setAutoVerifyLoading(true);
+          const res = await fetch("/api/coordinator/auto-verify/", {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "Accept": "application/json",
+            },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (isMounted) {
+              setIsAutoVerifyEnabled(Boolean(data.is_auto_verify_enabled));
+            }
+          }
+        } catch (err) {
+          console.error("ApprovalsPage: Failed to load auto-verify setting", err);
+        } finally {
+          if (isMounted) setAutoVerifyLoading(false);
+        }
+      }
+      fetchAutoVerifySetting();
+      return () => {
+        isMounted = false;
+      };
+    }, []);
+
+    const handleAutoVerifyToggle = async (e) => {
+      const nextVal = e.target.checked;
+      const prevVal = isAutoVerifyEnabled;
+      setIsAutoVerifyEnabled(nextVal);
+      setAutoVerifySaving(true);
+
+      const getCookie = Utils?.getCookie || (typeof window !== "undefined" ? window.DashboardApp?.Utils?.getCookie : null);
+      const csrfToken = getCookie ? getCookie("csrftoken") : "";
+
+      try {
+        const res = await fetch("/api/coordinator/auto-verify/", {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+          },
+          body: JSON.stringify({ is_auto_verify_enabled: nextVal }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Update failed (HTTP ${res.status})`);
+        }
+
+        const data = await res.json();
+        const updatedVal = Boolean(data.is_auto_verify_enabled);
+        setIsAutoVerifyEnabled(updatedVal);
+
+        const msg = data.message || `Auto-verification for new users has been ${updatedVal ? "enabled" : "disabled"}.`;
+        if (typeof ctx.addToast === "function") {
+          ctx.addToast(msg, "success");
+        }
+      } catch (err) {
+        console.error("ApprovalsPage: Error updating auto-verify setting", err);
+        setIsAutoVerifyEnabled(prevVal);
+        if (typeof ctx.addToast === "function") {
+          ctx.addToast(err.message || "Failed to update auto-verify setting.", "error");
+        }
+      } finally {
+        setAutoVerifySaving(false);
+      }
+    };
+
     const mentorCardLoading = (id) => approvalActionKey === "mentor:" + id;
     const menteeCardLoading = (id) => approvalActionKey === "mentee:" + id;
     if (!user.is_staff)
@@ -1320,7 +1400,120 @@
               Review verification documents and approve pending mentors and mentees.
             </p>
           </div>
-          <div className="kasandigan-header-actions">
+          <div className="kasandigan-header-actions" style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            {/* Auto-Verify New Users Switch adjacent to Pending Decisions */}
+            <div
+              className="auto-verify-header-toggle"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "10px",
+                background: "var(--card-bg, #ffffff)",
+                border: "1px solid var(--border-color, #e2e8f0)",
+                borderRadius: "12px",
+                padding: "6px 14px",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                transition: "border-color 0.2s, box-shadow 0.2s",
+              }}
+              title={
+                isAutoVerifyEnabled
+                  ? "Auto-Verify Active: Newly registered mentors and mentees are automatically approved and verified upon registration."
+                  : "Auto-Verify Off: Newly registered mentors and mentees require manual coordinator review and approval."
+              }
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "22px",
+                  height: "22px",
+                  borderRadius: "6px",
+                  backgroundColor: isAutoVerifyEnabled ? "rgba(22, 163, 74, 0.15)" : "rgba(100, 116, 139, 0.12)",
+                  color: isAutoVerifyEnabled ? "#16a34a" : "#64748b",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <span
+                style={{
+                  fontSize: "0.84rem",
+                  fontWeight: 600,
+                  color: "var(--text-primary, #0f172a)",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Auto-Verify New Users
+              </span>
+              <label
+                className="users-switch"
+                style={{
+                  position: "relative",
+                  display: "inline-block",
+                  width: "38px",
+                  height: "22px",
+                  margin: 0,
+                  cursor: autoVerifyLoading || autoVerifySaving ? "not-allowed" : "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isAutoVerifyEnabled}
+                  disabled={autoVerifyLoading || autoVerifySaving}
+                  onChange={handleAutoVerifyToggle}
+                  aria-label="Auto-Verify New Users"
+                  style={{ opacity: 0, width: 0, height: 0 }}
+                />
+                <span
+                  className="users-slider round"
+                  style={{
+                    position: "absolute",
+                    cursor: "pointer",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: isAutoVerifyEnabled ? "#16a34a" : "#cbd5e1",
+                    borderRadius: "22px",
+                    transition: "0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                    boxShadow: isAutoVerifyEnabled ? "0 2px 5px rgba(22, 163, 74, 0.3)" : "none",
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      height: "16px",
+                      width: "16px",
+                      left: isAutoVerifyEnabled ? "19px" : "3px",
+                      bottom: "3px",
+                      backgroundColor: "white",
+                      borderRadius: "50%",
+                      transition: "0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                    }}
+                  />
+                </span>
+              </label>
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "1px 6px",
+                  borderRadius: "5px",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.03em",
+                  textTransform: "uppercase",
+                  backgroundColor: isAutoVerifyEnabled ? "rgba(22, 163, 74, 0.15)" : "rgba(100, 116, 139, 0.12)",
+                  color: isAutoVerifyEnabled ? "#15803d" : "#475569",
+                }}
+              >
+                {autoVerifySaving ? "SAVING…" : isAutoVerifyEnabled ? "ACTIVE" : "OFF"}
+              </span>
+            </div>
+
             <div className="approvals-summary-pill">
               <span className="approvals-summary-pill-count">{totalPending}</span>
               <span>Pending Decisions</span>
@@ -1468,4 +1661,15 @@
   window.DashboardApp = window.DashboardApp || {};
   window.DashboardApp.Pages = window.DashboardApp.Pages || {};
   window.DashboardApp.Pages.approvals = ApprovalsPage;
+  window.DashboardApp.Pages.userApprovals = ApprovalsPage;
+  window.DashboardApp.ApprovalsPage = ApprovalsPage;
+  window.DashboardApp.UserApprovals = ApprovalsPage;
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { ApprovalsPage, UserApprovals: ApprovalsPage };
+  }
 })();
+
+export const ApprovalsPage = window.DashboardApp.ApprovalsPage;
+export const UserApprovals = window.DashboardApp.UserApprovals;
+export default ApprovalsPage;
+

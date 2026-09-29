@@ -220,3 +220,60 @@ def coordinator_auto_approve(request):
     })
 
 
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated, IsCoordinator])
+def coordinator_auto_verify(request):
+    """
+    GET: Retrieve the current auto-verify setting for new user registrations.
+    PATCH: Update the is_auto_verify_enabled setting.
+    """
+    from profiles.models import CoordinatorProfile, SystemSettings
+
+    coord_profile, _ = CoordinatorProfile.objects.get_or_create(user=request.user)
+    sys_settings = SystemSettings.get_settings()
+
+    if request.method == "GET":
+        is_enabled = bool(coord_profile.is_auto_verify_enabled or sys_settings.is_auto_verify_enabled)
+        return JsonResponse({
+            "is_auto_verify_enabled": is_enabled,
+            "status": "ok",
+        })
+
+    # PATCH
+    data = request.data if hasattr(request, "data") else {}
+    if not isinstance(data, dict):
+        try:
+            import json
+            data = json.loads(request.body or "{}")
+        except Exception:
+            data = {}
+
+    if "is_auto_verify_enabled" not in data:
+        return JsonResponse(
+            {"error": "Field 'is_auto_verify_enabled' is required."},
+            status=400,
+        )
+
+    new_val = bool(data["is_auto_verify_enabled"])
+    coord_profile.is_auto_verify_enabled = new_val
+    coord_profile.save(update_fields=["is_auto_verify_enabled", "updated_at"])
+
+    sys_settings.is_auto_verify_enabled = new_val
+    sys_settings.save(update_fields=["is_auto_verify_enabled", "updated_at"])
+
+    audit_log(
+        request.user,
+        "update_setting",
+        "coordinator_auto_verify",
+        coord_profile.id,
+    )
+
+    action_text = "enabled" if new_val else "disabled"
+    return JsonResponse({
+        "status": "ok",
+        "is_auto_verify_enabled": new_val,
+        "message": f"Auto-verification for new users has been {action_text}.",
+    })
+
+
+

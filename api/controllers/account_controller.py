@@ -991,11 +991,23 @@ def unified_auth_register(request):
                 is_staff=(role == UserProfile.ROLE_COORDINATOR),
             )
 
-            # Determine initial approval status - strictly PENDING for all newly registered accounts
-            if role == UserProfile.ROLE_COORDINATOR or user.is_staff:
+            # Check if auto-verify for new users is enabled
+            try:
+                from profiles.models import CoordinatorProfile, SystemSettings
+                is_auto_verify = (
+                    SystemSettings.get_settings().is_auto_verify_enabled
+                    or CoordinatorProfile.objects.filter(is_auto_verify_enabled=True).exists()
+                )
+            except Exception:
+                is_auto_verify = False
+
+            # Determine initial approval status
+            if role == UserProfile.ROLE_COORDINATOR or user.is_staff or is_auto_verify:
                 approval_status = UserProfile.STATUS_ACTIVE
+                is_approved = True
             else:
                 approval_status = UserProfile.STATUS_PENDING
+                is_approved = False
 
             user_profile = UserProfile.objects.create(
                 user=user,
@@ -1010,23 +1022,33 @@ def unified_auth_register(request):
             # Create legacy MentorProfile / MenteeProfile for matching compatibility
             is_mentor = role in (UserProfile.ROLE_STUDENT_MENTOR, UserProfile.ROLE_INSTRUCTOR_MENTOR)
             if is_mentor:
-                MentorProfile.objects.create(
+                m_prof = MentorProfile.objects.create(
                     user=user,
                     program=program,
                     year_level=year_level,
                     role="Instructor" if role == UserProfile.ROLE_INSTRUCTOR_MENTOR else "Senior IT Student",
-                    approved=False,
+                    approved=is_approved,
                     is_profile_complete=False,
                 )
+                if is_approved:
+                    try:
+                        invalidate_approval_cache_mentor(m_prof.id)
+                    except Exception:
+                        pass
             elif role == UserProfile.ROLE_MENTEE:
-                MenteeProfile.objects.create(
+                e_prof = MenteeProfile.objects.create(
                     user=user,
                     program=program,
                     year_level=1,
                     campus=campus,
-                    approved=False,  # Mentees strictly default to pending Coordinator approval
+                    approved=is_approved,
                     is_profile_complete=False,
                 )
+                if is_approved:
+                    try:
+                        invalidate_approval_cache_mentee(e_prof.id)
+                    except Exception:
+                        pass
 
             _ensure_onboarding_state(user, False)
 
@@ -2207,7 +2229,21 @@ def complete_onboarding(request):
     user_profile.program = program or user_profile.program
     user_profile.year_level = profile.year_level
     user_profile.is_onboarded = True
-    user_profile.approval_status = UserProfile.STATUS_PENDING
+    try:
+        from profiles.models import CoordinatorProfile, SystemSettings
+        is_auto_verify = (
+            SystemSettings.get_settings().is_auto_verify_enabled
+            or CoordinatorProfile.objects.filter(is_auto_verify_enabled=True).exists()
+        )
+    except Exception:
+        is_auto_verify = False
+
+    if is_auto_verify or user_profile.approval_status == UserProfile.STATUS_ACTIVE:
+        user_profile.approval_status = UserProfile.STATUS_ACTIVE
+        profile.approved = True
+        profile.save(update_fields=["approved"])
+    else:
+        user_profile.approval_status = UserProfile.STATUS_PENDING
     user_profile.save()
     mark_profile_complete(profile, True)
     _ensure_onboarding_state(request.user, True)
